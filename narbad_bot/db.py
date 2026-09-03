@@ -36,6 +36,23 @@ CREATE TABLE IF NOT EXISTS army (
     PRIMARY KEY (user_id, unit)
 );
 
+CREATE TABLE IF NOT EXISTS defenses (
+    user_id    INTEGER NOT NULL,
+    structure  TEXT    NOT NULL,
+    level      INTEGER NOT NULL DEFAULT 1,
+    health     INTEGER NOT NULL DEFAULT 100,
+    PRIMARY KEY (user_id, structure)
+);
+
+CREATE TABLE IF NOT EXISTS training (
+    user_id   INTEGER PRIMARY KEY,
+    unit      TEXT    NOT NULL,
+    count     INTEGER NOT NULL,
+    start_ts  INTEGER NOT NULL,
+    finish_ts INTEGER NOT NULL,
+    cost      INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS battles (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     ts           INTEGER NOT NULL,
@@ -172,6 +189,23 @@ class DB:
             await self.conn.execute("ALTER TABLE clans ADD COLUMN group_id INTEGER DEFAULT NULL")
         if "group_title" not in ccols:
             await self.conn.execute("ALTER TABLE clans ADD COLUMN group_title TEXT DEFAULT ''")
+        # مایگریشن سیستم نوین ارتش: «تکاور» (ranger) → «کماندو» (commando)
+        await self.conn.execute(
+            "UPDATE army SET unit = 'commando' "
+            "WHERE unit = 'ranger' AND user_id NOT IN "
+            "(SELECT user_id FROM army WHERE unit = 'commando')")
+        await self.conn.execute("DELETE FROM army WHERE unit = 'ranger'")
+        # مایگریشن سیستم نوین دفاع: انتقال سازه‌ها از جدول army به جدول اختصاصی defenses
+        await self.conn.execute(
+            "INSERT OR IGNORE INTO defenses (user_id, structure, level, health) "
+            "SELECT user_id, "
+            "CASE WHEN unit = 'castle' THEN 'air_defense' ELSE unit END, "
+            "count, 100 FROM army "
+            "WHERE unit IN ('wall', 'tower', 'castle', 'radar', 'air_defense') AND count > 0"
+        )
+        await self.conn.execute(
+            "DELETE FROM army WHERE unit IN ('wall', 'tower', 'castle', 'radar', 'air_defense')"
+        )
 
     async def _seed_territories(self) -> None:
         cur = await self.conn.execute("SELECT COUNT(*) AS n FROM territories")
@@ -255,9 +289,19 @@ class DB:
         rows = await self._fetchall(
             "SELECT unit, count FROM army WHERE user_id = ? AND count > 0", (user_id,)
         )
-        return {r["unit"]: r["count"] for r in rows}
+        army = {r["unit"]: r["count"] for r in rows}
+        def_rows = await self._fetchall(
+            "SELECT structure, level FROM defenses WHERE user_id = ? AND level > 0", (user_id,)
+        )
+        for r in def_rows:
+            army[r["structure"]] = r["level"]
+        return army
 
     async def set_unit(self, user_id: int, unit: str, count: int) -> None:
+        if unit in game.DEFENSES or unit == "castle":
+            struct = "air_defense" if unit == "castle" else unit
+            await self.set_defense(user_id, struct, count, 100)
+            return
         await self._execute(
             "INSERT INTO army (user_id, unit, count) VALUES (?, ?, ?) "
             "ON CONFLICT(user_id, unit) DO UPDATE SET count = excluded.count",
@@ -266,6 +310,119 @@ class DB:
 
     async def all_users(self) -> list[dict]:
         return await self._fetchall("SELECT * FROM users")
+
+    # ------------------------------------------------------------ پادگان آموزش (سیستم نوین ارتش)
+    async def training_get(self, user_id: int) -> dict | None:
+        """وضعیت فعلی آموزش (اگر زمانی باقی مانده باشد)."""
+        return await self._fetchone(
+            "SELECT * FROM training WHERE user_id = ? AND finish_ts > ?",
+            (user_id, int(time.time())))
+
+    async def training_start(self, user_id: int, unit: str, count: int,
+                             start_ts: int, finish_ts: int, cost: int) -> None:
+        await self._execute(
+            "INSERT INTO training (user_id, unit, count, start_ts, finish_ts, cost) "
+            "VALUES (?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(user_id) DO UPDATE SET unit = excluded.unit, "
+            "count = excluded.count, start_ts = excluded.start_ts, "
+            "finish_ts = excluded.finish_ts, cost = excluded.cost",
+            (user_id, unit, count, start_ts, finish_ts, cost),
+        )
+
+    async def training_clear(self, user_id: int) -> None:
+        await self._execute("DELETE FROM training WHERE user_id = ?", (user_id,))
+
+    async def settle_training(self, user_id: int) -> list[dict]:
+        """تسویهٔ آموزش‌های کامل‌شده: یگان‌ها به ارتش اضافه و رکورد پاک می‌شود.
+
+        خروجی: فهرست رکوردهای تسویه‌شده (خالی اگر چیزی کامل نشده باشد).
+        همین‌جا «جلوگیری از ساخت آنی» اعمال می‌شود: تا finish_ts نرسیده باشد،
+        یگانی به ارتش اضافه نمی‌شود.
+        """
+        rows = await self._fetchall(
+            "SELECT * FROM training WHERE user_id = ? AND finish_ts <= ?",
+            (user_id, int(time.time())))
+        if not rows:
+            return []
+        army = await self.get_army(user_id)
+        for r in rows:
+            await self.set_unit(user_id, r["unit"],
+                                army.get(r["unit"], 0) + r["count"])
+            army[r["unit"]] = army.get(r["unit"], 0) + r["count"]
+        await self._execute("DELETE FROM training WHERE user_id = ?", (user_id,))
+        return rows
+
+    # ------------------------------------------------------------ سازه‌های دفاعی پایگاه
+    async def get_defenses(self, user_id: int) -> dict[str, dict[str, int]]:
+        """خواندن همهٔ سازه‌های دفاعی فعال کاربر به همراه سطح و درصد سلامت."""
+        rows = await self._fetchall(
+            "SELECT structure, level, health FROM defenses WHERE user_id = ? AND level > 0",
+            (user_id,),
+        )
+        return {r["structure"]: {"level": r["level"], "health": r["health"]} for r in rows}
+
+    async def get_defense_structure(self, user_id: int, structure: str) -> dict | None:
+        """اطلاعات یک سازهٔ خاص برای کاربر."""
+        return await self._fetchone(
+            "SELECT structure, level, health FROM defenses "
+            "WHERE user_id = ? AND structure = ? AND level > 0",
+            (user_id, structure),
+        )
+
+    async def set_defense(self, user_id: int, structure: str, level: int,
+                          health: int = 100) -> None:
+        """تنظیم یا حذف سطح/سلامت یک سازه دفاعی."""
+        if level <= 0:
+            await self._execute(
+                "DELETE FROM defenses WHERE user_id = ? AND structure = ?",
+                (user_id, structure),
+            )
+        else:
+            await self._execute(
+                "INSERT INTO defenses (user_id, structure, level, health) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(user_id, structure) DO UPDATE SET level = excluded.level, health = excluded.health",
+                (user_id, structure, level, max(0, min(100, health))),
+            )
+
+    async def upgrade_defense(self, user_id: int, structure: str) -> int:
+        """ارتقای سطح سازه به مرحلهٔ بعد (سلامت ۱۰۰٪ بازنشانی می‌شود)."""
+        curr = await self.get_defense_structure(user_id, structure)
+        new_lvl = (curr["level"] + 1) if curr else 1
+        await self.set_defense(user_id, structure, new_lvl, 100)
+        return new_lvl
+
+    async def repair_defense(self, user_id: int, structure: str | None = None) -> None:
+        """تعمیر یک سازه یا تمام سازه‌های دفاعی پایگاه تا ۱۰۰٪ سلامت."""
+        if structure:
+            await self._execute(
+                "UPDATE defenses SET health = 100 WHERE user_id = ? AND structure = ?",
+                (user_id, structure),
+            )
+        else:
+            await self._execute(
+                "UPDATE defenses SET health = 100 WHERE user_id = ?",
+                (user_id,),
+            )
+
+    async def damage_defenses(self, user_id: int, damage_pct: int) -> dict[str, int]:
+        """اعمال خسارت به سازه‌های دفاعی در نتیجهٔ نبرد (حداقل سلامت ۱۰٪)."""
+        defs = await self.get_defenses(user_id)
+        out = {}
+        for s, data in defs.items():
+            new_h = max(10, data["health"] - damage_pct)
+            await self._execute(
+                "UPDATE defenses SET health = ? WHERE user_id = ? AND structure = ?",
+                (new_h, user_id, s),
+            )
+            out[s] = new_h
+        return out
+
+    async def defense_battle_history(self, user_id: int, limit: int = 5) -> list[dict]:
+        """تاریخچهٔ آخرین نبردهای دفاعی پایگاه."""
+        return await self._fetchall(
+            "SELECT * FROM battles WHERE defender_id = ? ORDER BY id DESC LIMIT ?",
+            (user_id, limit),
+        )
 
     # ------------------------------------------------------------ رده‌بندی
     async def top_power(self, limit: int = 10) -> list[dict]:
@@ -636,6 +793,8 @@ class DB:
         await self._execute("DELETE FROM army WHERE user_id = ?", (user_id,))
         await self.set_unit(user_id, "soldier", game.START_SOLDIERS)
         # پاک‌سازی بخش‌های جانبی
+        await self._execute("DELETE FROM defenses WHERE user_id = ?", (user_id,))
+        await self._execute("DELETE FROM training WHERE user_id = ?", (user_id,))
         await self._execute("DELETE FROM inventory WHERE user_id = ?", (user_id,))
         await self._execute("DELETE FROM buffs WHERE user_id = ?", (user_id,))
         await self._execute("DELETE FROM missions WHERE user_id = ?", (user_id,))

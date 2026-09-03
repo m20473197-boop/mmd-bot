@@ -141,7 +141,7 @@ async def cmd_mine(message: Message) -> None:
         army = await _db.get_army(user["user_id"])
         workers = min(game.MINE_WORKER_CAP, army.get("soldier", 0))
         if workers <= 0:
-            await message.answer("⛏ اول با /train سرباز بخر تا معدنچی داشته باشی!")
+            await message.answer("⛏ اول از «🪖 ارتش → 🏗 آموزش نیروی زمینی» سرباز آموزش بده تا معدنچی داشته باشی!")
             return
         await _db.mine_start(user["user_id"], int(time.time()), workers)
         await message.answer(

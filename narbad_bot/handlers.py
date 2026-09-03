@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import html
+import random
 import time
 
 from aiogram import F, Router
@@ -57,17 +58,6 @@ def energy_line(u: dict) -> str:
 
 
 # ================================================================ صفحه‌ها
-def train_text(u: dict) -> str:
-    return (
-        f"⚔️ <b>لشکرکشی — آموزش یگان</b>\n"
-        f"💰 موجودی: <b>{admin_core.coins_display(u)}</b> سکه\n"
-        f"{energy_line(u)}\n"
-        f"────────────────\n"
-        "یگان مورد نظر را انتخاب کن، سپس تعداد و تأیید خرید را انجام بده:\n"
-        "👑 مدیران: خریدها رایگان و نامحدود است."
-    )
-
-
 def defense_text(u: dict) -> str:
     return (
         f"🛡 <b>تجهیزات دفاعی</b>\n"
@@ -79,38 +69,6 @@ def defense_text(u: dict) -> str:
     )
 
 
-def train_kb() -> InlineKeyboardMarkup:
-    b = InlineKeyboardBuilder()
-    for key, u_ in game.UNITS.items():
-        b.button(
-            text=f"{u_['emoji']} {u_['name']} — {game.fa(u_['cost'])}💰 هر عدد",
-            callback_data=f"unit:select:{key}",
-        )
-    b.button(text="🛡 تجهیزات دفاعی", callback_data="nav:defense")
-    b.button(text="⬅️ بازگشت", callback_data="nav:army")
-    b.button(text="🏠 منوی اصلی", callback_data="nav:main")
-    b.adjust(1)
-    return b.as_markup()
-
-def qty_kb(unit_key: str) -> InlineKeyboardMarkup:
-    b = InlineKeyboardBuilder()
-    for qty in [1, 5, 10, 25, 50, 100]:
-        total = game.UNITS[unit_key]["cost"] * qty
-        b.button(text=f"×{game.fa(qty)} — {game.fa(total)}💰", callback_data=f"unit:qty:{unit_key}:{qty}")
-    b.button(text="⬅️ بازگشت", callback_data="unit:back")
-    b.button(text="🏠 منوی اصلی", callback_data="nav:main")
-    b.adjust(3, 3, 2)
-    return b.as_markup()
-
-def confirm_kb(unit_key: str, qty: int) -> InlineKeyboardMarkup:
-    total = game.UNITS[unit_key]["cost"] * qty
-    b = InlineKeyboardBuilder()
-    b.button(text=f"✅ تأیید خرید — {game.fa(total)}💰", callback_data=f"unit:confirm:{unit_key}:{qty}")
-    b.button(text="❌ انصراف", callback_data="unit:cancel")
-    b.adjust(1)
-    return b.as_markup()
-
-
 def defense_kb() -> InlineKeyboardMarkup:
     b = InlineKeyboardBuilder()
     for key, d_ in game.DEFENSES.items():
@@ -118,7 +76,7 @@ def defense_kb() -> InlineKeyboardMarkup:
             text=f"{d_['emoji']} {d_['name']} — {game.fa(d_['cost'])}💰",
             callback_data=f"buydef:{key}:1",
         )
-    b.button(text="⚔️ خرید یگان", callback_data="nav:army")
+    b.button(text="🪖 ارتش (تجهیزات و آموزش)", callback_data="nav:army")
     b.button(text="⬅️ بازگشت", callback_data="nav:defense")
     b.button(text="🏠 منوی اصلی", callback_data="nav:main")
     b.adjust(1)
@@ -138,7 +96,7 @@ async def cmd_start(message: Message) -> None:
         f"💰 {game.fa(coin(u))} سکه و {game.fa(game.START_SOLDIERS)} 🪖 سرباز هدیه گرفتی.\n\n"
         f"🎮 <b>همه چیز از طریق منوی پایین قابل دسترسی است:</b>\n"
         f"🏠 پایگاه — پروفایل، جایزه، مأموریت، معدن، نمودار، رده‌بندی\n"
-        f"🪖 ارتش — آموزش یگان، ارتقا، موجودی\n"
+        f"🪖 ارتش — ارتش من، خرید تجهیزات نظامی، آموزش نیروی زمینی\n"
         f"🛡 دفاع — خرید و ارتقای سازه‌ها، سپر\n"
         f"⚔️ نبرد — نبرد تصادفی (تنها روش حمله)، تاریخچه\n"
         f"🏰 اتحادیه — قبیله، جنگ، قلمروها\n"
@@ -157,7 +115,7 @@ async def cmd_help(message: Message) -> None:
         "────────────────\n"
         "🎮 <b>منوی اصلی (پایین چت):</b>\n"
         "🏠 پایگاه — 👤 پروفایل، 🎁 جایزه روزانه، 🎯 مأموریت‌ها، ⛏ معدن، 📈 نمودار رشد، 🏆 رده‌بندی، 📜 تاریخچه، 🛡️ سپر\n"
-        "🪖 ارتش — 🎓 آموزش یگان (۹ یگان)، 🗃️ ارتش من، ⬆️ ارتقای یگان\n"
+        "🪖 ارتش — 🪖 ارتش من، 🛒 خرید تجهیزات نظامی، 🏗 آموزش نیروی زمینی\n"
         "🛡 دفاع — 🧱 خرید سازه، ⬆️ ارتقای دفاع (۴ سازه)، 🛡️ سپر\n"
         "⚔️ نبرد — 🎲 نبرد تصادفی، 🎯 منوی حمله، 📜 تاریخچه، 📊 اطلاعات نبرد\n"
         "🏰 اتحادیه — 🏰 اتحادیه من، 📋 لیست، ⚔️ جنگ، 💰 خزانه، 🗺 قلمروها\n"
@@ -180,10 +138,10 @@ async def cmd_help(message: Message) -> None:
 async def cmd_profile(message: Message) -> None:  # (hidden)
     u = await me(message)
     army = await _db.get_army(u["user_id"])
-    structures = {k: v for k, v in army.items() if k in game.DEFENSES}
+    defenses = await _db.get_defenses(u["user_id"])
     energy, _ = game.effective_energy(u)
     power = game.attack_power(army)
-    defense = game.defense_power({k: v for k, v in army.items() if k in game.UNITS}, structures)
+    defense = game.defense_power({k: v for k, v in army.items() if k in game.UNITS}, defenses, base_level=u["level"])
     next_xp = game.xp_to_next(u["level"])
     bar_len = 12
     filled = round(u["xp"] / next_xp * bar_len)
@@ -212,22 +170,9 @@ async def cmd_profile(message: Message) -> None:  # (hidden)
     await message.answer(text)
 
 
-# ================================================================ فروشگاه
-async def cmd_train(message: Message) -> None:  # (hidden)
-    u = await me(message)
-    await message.answer(train_text(u), reply_markup=train_kb())
-
-
 async def cmd_defense(message: Message) -> None:  # (hidden)
     u = await me(message)
     await message.answer(defense_text(u), reply_markup=defense_kb())
-
-
-@router.callback_query(F.data == "menu:train")
-async def cb_menu_train(cb: CallbackQuery) -> None:
-    u = await me_cb(cb)
-    await cb.message.edit_text(train_text(u), reply_markup=train_kb())
-    await cb.answer()
 
 
 @router.callback_query(F.data == "menu:defense")
@@ -241,26 +186,6 @@ async def cb_menu_defense(cb: CallbackQuery) -> None:
 async def cb_close(cb: CallbackQuery) -> None:
     await cb.message.delete()
     await cb.answer()
-
-
-@router.callback_query(F.data.startswith("buy:"))
-async def cb_buy(cb: CallbackQuery) -> None:
-    _, key, cnt = cb.data.split(":")
-    cnt = int(cnt)
-    u = await me_cb(cb)
-    unit = game.UNITS[key]
-    cost = unit["cost"] * cnt
-    # مدیر: خرید رایگان/نامحدود (بدون کسر از دیتابیس)؛
-    # دیگران: کسر عادی سکه
-    if not await admin_core.pay(u, cost):
-        await cb.answer("سکه کافی نداری! 🪙 با /daily جایزه بگیر.", show_alert=True)
-        return
-    army = await _db.get_army(u["user_id"])
-    await _db.set_unit(u["user_id"], key, army.get(key, 0) + cnt)
-    await hooks.after_purchase(u["user_id"], cnt, cost)
-    await cb.answer(f"✅ {unit['emoji']} {unit['name']} × {game.fa(cnt)} به ارتش تو اضافه شد!")
-    u = await me_cb(cb)
-    await cb.message.edit_text(train_text(u), reply_markup=train_kb())
 
 
 @router.callback_query(F.data.startswith("buydef:"))
@@ -280,84 +205,6 @@ async def cb_buydef(cb: CallbackQuery) -> None:
     await cb.answer(f"✅ {structure['emoji']} {structure['name']} ساخته شد!")
     u = await me_cb(cb)
     await cb.message.edit_text(defense_text(u), reply_markup=defense_kb())
-
-# ================================================================ خرید یگان با انتخاب تعداد و تأیید
-@router.callback_query(F.data.startswith("unit:select:"))
-async def cb_unit_select(cb: CallbackQuery) -> None:
-    key = cb.data.split(":")[2]
-    if key not in game.UNITS:
-        await cb.answer("یگان نامعتبر!", show_alert=True)
-        return
-    u = await me_cb(cb)
-    unit = game.UNITS[key]
-    text = (
-        f"{unit['emoji']} <b>{unit['name']}</b>\n"
-        f"────────────────\n"
-        f"💰 قیمت هر عدد: <b>{game.fa(unit['cost'])}</b> سکه\n"
-        f"⚔️ قدرت هر عدد: <b>{game.fa(unit['power'])}</b>\n"
-        f"💰 موجودی تو: {admin_core.coins_display(u)} سکه\n"
-        f"────────────────\n"
-        f"تعداد مورد نظر را انتخاب کن:"
-    )
-    await cb.message.edit_text(text, reply_markup=qty_kb(key))
-    await cb.answer()
-
-@router.callback_query(F.data.startswith("unit:qty:"))
-async def cb_unit_qty(cb: CallbackQuery) -> None:
-    _, _, key, qty = cb.data.split(":")
-    qty = int(qty)
-    if key not in game.UNITS:
-        await cb.answer("یگان نامعتبر!", show_alert=True)
-        return
-    u = await me_cb(cb)
-    unit = game.UNITS[key]
-    total = unit["cost"] * qty
-    text = (
-        f"{unit['emoji']} <b>{unit['name']} × {game.fa(qty)}</b>\n"
-        f"────────────────\n"
-        f"💰 قیمت واحد: {game.fa(unit['cost'])} سکه\n"
-        f"🔢 تعداد: <b>{game.fa(qty)}</b> عدد\n"
-        f"💳 قیمت کل: <b>{game.fa(total)}</b> سکه\n"
-        f"💰 موجودی تو: {admin_core.coins_display(u)} سکه\n"
-        f"────────────────\n"
-        f"آیا خرید را تأیید می‌کنی؟"
-    )
-    await cb.message.edit_text(text, reply_markup=confirm_kb(key, qty))
-    await cb.answer()
-
-@router.callback_query(F.data.startswith("unit:confirm:"))
-async def cb_unit_confirm(cb: CallbackQuery) -> None:
-    _, _, key, qty = cb.data.split(":")
-    qty = int(qty)
-    if key not in game.UNITS:
-        await cb.answer("یگان نامعتبر!", show_alert=True)
-        return
-    u = await me_cb(cb)
-    unit = game.UNITS[key]
-    cost = unit["cost"] * qty
-    if not await admin_core.pay(u, cost):
-        await cb.answer("سکه کافی نداری! 🪙 با /daily جایزه بگیر.", show_alert=True)
-        return
-    army = await _db.get_army(u["user_id"])
-    await _db.set_unit(u["user_id"], key, army.get(key, 0) + qty)
-    await hooks.after_purchase(u["user_id"], qty, cost)
-    await cb.answer(f"✅ {unit['emoji']} {unit['name']} × {game.fa(qty)} به ارتش تو اضافه شد!")
-    u = await me_cb(cb)
-    await cb.message.edit_text(train_text(u), reply_markup=train_kb())
-
-@router.callback_query(F.data == "unit:back")
-async def cb_unit_back(cb: CallbackQuery) -> None:
-    u = await me_cb(cb)
-    await cb.message.edit_text(train_text(u), reply_markup=train_kb())
-    await cb.answer()
-
-@router.callback_query(F.data == "unit:cancel")
-async def cb_unit_cancel(cb: CallbackQuery) -> None:
-    u = await me_cb(cb)
-    await cb.message.edit_text(train_text(u), reply_markup=train_kb())
-    await cb.answer()
-    # keep menu open, return to train list
-
 
 # ================================================================ سپر
 async def cmd_shield(message: Message) -> None:  # (hidden)
@@ -492,7 +339,7 @@ async def cmd_log(message: Message) -> None:  # (hidden)
     u = await me(message)
     rows = await _db.battle_history(u["user_id"], 10)
     if not rows:
-        await message.answer("📜 هنوز نبردی انجام ندادی! با /war شروع کن ⚔️")
+        await message.answer("📜 هنوز نبردی انجام ندادی! از «⚔️ نبرد → 🎲 نبرد تصادفی» شروع کن ⚔️")
         return
     lines = ["📜 <b>تاریخچهٔ آخرین نبردها</b>", "────────────────"]
     for r in rows:
@@ -626,11 +473,12 @@ async def run_attack(message: Message, target_id: int, target: dict) -> None:
 
     att_army = await _db.get_army(u["user_id"])
     if game.attack_power(att_army) <= 0:
-        await message.answer("🪖 اول یگان بخر! با /train ارتش بساز.")
+        await message.answer("🪖 ارتشت خالی است! از «🪖 ارتش → 🏗 آموزش نیروی زمینی» سرباز بساز "
+                   "یا از «🛒 خرید تجهیزات نظامی» بخر.")
         return
 
     def_army = await _db.get_army(target_id)
-    def_struct = {k: v for k, v in def_army.items() if k in game.DEFENSES}
+    def_struct = await _db.get_defenses(target_id)
 
     # --- بافت‌ها و آیتم‌های فعال
     buffs = await _db.buffs_active(u["user_id"])
@@ -659,18 +507,20 @@ async def run_attack(message: Message, target_id: int, target: dict) -> None:
     # --- نبرد
     res = game.simulate_battle(att_army, def_army, def_struct,
                                coin(u), coin(defender),
+                               def_base_level=defender.get("level", 1),
                                att_mult=att_mult, loot_mult=loot_mult,
                                xp_mult=xp_mult, cas_mult=cas_mult)
 
-    # --- اعمال تلفات
+    # --- اعمال تلفات یگان‌ها و خسارت به سازه‌های دفاعی
     for unit_key, loss in res["att_cas"].items():
         await _db.set_unit(u["user_id"], unit_key, att_army.get(unit_key, 0) - loss)
     for unit_key, loss in res["def_cas"].items():
         await _db.set_unit(target_id, unit_key, def_army.get(unit_key, 0) - loss)
 
-    # --- اعمال سکه، تجربه و آمار
-    # (انرژی قبلاً در try_spend_energy مصرف شد؛ مدیرها اصلاً انرژی کم نمی‌شود)
+    # خسارت به سازه‌های دفاعی پایگاه مدافع
     att_won = res["winner"] == "attacker"
+    damage_pct = random.randint(15, 30) if att_won else random.randint(5, 15)
+    damaged = await _db.damage_defenses(target_id, damage_pct)
     xp_gained = res["att_xp"] if att_won else res["def_xp"]
     # تست‌کننده‌ها تجربهٔ ×۲ می‌گیرند (پیشرفت سریع‌تر)
     xp_gained = round(xp_gained * admin_core.xp_multiplier(u["user_id"]))
@@ -776,7 +626,7 @@ async def cmd_growth(message: Message) -> None:  # (hidden)
     if png is None:
         await message.answer(
             "📈 برای دیدن نمودار رشدت باید حداقل ۲ نبرد انجام بدهی! "
-            "با /war یا /attack شروع کن. ⚔️"
+            "از «⚔️ نبرد → 🎲 نبرد تصادفی» یا /attack شروع کن. ⚔️"
         )
         return
     from aiogram.types import BufferedInputFile

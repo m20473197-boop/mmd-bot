@@ -21,7 +21,7 @@ class TestUnits(unittest.TestCase):
         # دفاع: یگان ۷۰٪ + سازه کامل
         self.assertEqual(
             game.defense_power({"soldier": 10}, {"wall": 2}),
-            round(10 * 10 * 0.7 + 2 * 25),
+            round(10 * 10 * 0.7 + game.struct_defense_power("wall", 2)),
         )
 
 

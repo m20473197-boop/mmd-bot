@@ -299,6 +299,13 @@ async def _handle_give(action: str, message: Message, text: str) -> None:
         if key not in GIVEABLE_UNITS:
             await message.answer(f"❌ کلید یگان نامعتبر! کلیدها: {', '.join(GIVEABLE_UNITS)}")
             return
+        if key in game.DEFENSES:
+            await _db.set_defense(uid, key, count, 100)
+            disp = game.DISP.get(key, {})
+            await message.answer(
+                f"✅ {disp.get('emoji', '')} سازه دفاعی {disp.get('name', key)} "
+                f"(سطح {game.fa(count)}) برای {game.fa(uid)} تنظیم شد.")
+            return
         army = await _db.get_army(uid)
         await _db.set_unit(uid, key, army.get(key, 0) + count)
         disp = game.DISP.get(key, {})
@@ -344,9 +351,9 @@ async def _show_info(message: Message, uid: int) -> None:
         await message.answer("❌ بازیکنی با این شناسه پیدا نشد!")
         return
     army = await _db.get_army(uid)
-    structures = {k: v for k, v in army.items() if k in game.DEFENSES}
+    defenses = await _db.get_defenses(uid)
     power = game.attack_power(army)
-    defense = game.defense_power(army, structures)
+    defense = game.defense_power(army, defenses, base_level=user["level"])
     inv = await _db.inv_get(uid)
     buffs = await _db.buffs_active(uid)
     missions = await _db.missions_today(uid)
