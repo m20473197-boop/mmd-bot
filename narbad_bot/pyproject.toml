@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "narbad-bot"
+version = "1.0.0"
+description = "ربات تلگرامی نبردگاه — بازی جنگ و رقابت نظامی بین کاربران"
+requires-python = ">=3.10"
+dependencies = [
+    "aiogram>=3.7,<4.0",
+    "aiosqlite>=0.19",
+    "python-dotenv>=1.0",
+]
+
+[project.scripts]
+narbad = "narbad_bot.bot:main"
+
+[tool.setuptools]
+packages = ["narbad_bot"]
