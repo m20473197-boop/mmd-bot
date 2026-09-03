@@ -7,8 +7,7 @@ import unittest
 from aiogram import Dispatcher
 
 from narbad_bot import (handlers, handlers_army, handlers_clan,
-                        handlers_defense, handlers_missions, handlers_shop,
-                        handlers_territory, menu)
+                        handlers_defense, handlers_missions, menu)
 from narbad_bot.db import DB
 
 
@@ -19,23 +18,22 @@ class TestMenuLayout(unittest.TestCase):
         self.assertEqual(kb.__class__.__name__, "ReplyKeyboardMarkup")
         self.assertEqual(len(kb.keyboard), 2)      # دو ردیف
         self.assertEqual(len(kb.keyboard[0]), 3)   # سه ستون
-        self.assertEqual(len(kb.keyboard[1]), 3)
+        self.assertEqual(len(kb.keyboard[1]), 2)   # دو ستون
         # برچسب‌های دقیق دکمه‌ها
         flat = [b.text for row in kb.keyboard for b in row]
         self.assertEqual(flat, list(menu.MENU_BUTTONS))
         self.assertTrue(kb.resize_keyboard)
         self.assertTrue(kb.is_persistent)
 
-    def test_all_six_buttons_present(self):
+    def test_all_five_buttons_present(self):
         expected = {"🏠 پایگاه", "⚔️ نبرد", "🪖 ارتش",
-                    "🏰 اتحادیه", "🛡 دفاع", "🛒 فروشگاه"}
+                    "🏰 اتحادیه", "🛡 دفاع"}
         self.assertEqual(set(menu.MENU_BUTTONS), expected)
 
     def test_menu_router_has_five_button_handlers(self):
         """چهار دکمهٔ دسته در menu router، دکمهٔ «🪖 ارتش» در handlers_army و دکمهٔ «🛡 دفاع» در handlers_defense."""
         names = {h.callback.__name__ for h in menu.router.message.handlers}
-        for expected in ("on_base", "on_battle",
-                         "on_clan", "on_shop"):
+        for expected in ("on_base", "on_battle", "on_clan"):
             self.assertIn(expected, names)
         from narbad_bot import handlers_army, handlers_defense
         army_names = {h.callback.__name__ for h in handlers_army.router.message.handlers}
@@ -60,10 +58,8 @@ class TestMenuDB(unittest.IsolatedAsyncioTestCase):
         await self.db.init()
         menu.setup(self.db)
         handlers.setup(self.db)
-        handlers_shop.setup(self.db)
         handlers_missions.setup(self.db)
         handlers_clan.setup(self.db)
-        handlers_territory.setup(self.db)
 
     async def asyncTearDown(self):
         await self.db.close()
@@ -77,7 +73,7 @@ class TestMenuDB(unittest.IsolatedAsyncioTestCase):
         self.assertIn("قدرت", text)
 
     async def test_menu_buttons_reach_handlers(self):
-        """هر شش دکمهٔ منو باید به یک پنل inline کامل ختم شود."""
+        """هر دکمهٔ منو باید به یک پنل inline کامل ختم شود."""
         u = await self.db.ensure_user(1, "a", "الف")
         base_text_fn = menu.base_text if hasattr(menu, "base_text") else lambda x: menu.BASE_PANEL
         # handle both sync/async
@@ -92,7 +88,6 @@ class TestMenuDB(unittest.IsolatedAsyncioTestCase):
         eq_buttons = [b.callback_data for r in handlers_army.equipment_kb().inline_keyboard for b in r]
         self.assertEqual(sum(1 for c in eq_buttons if c.startswith("army:eqview:")), 7)  # 🪖 ۷ تجهیز
         self.assertGreater(len(handlers.defense_kb().inline_keyboard), 3)  # 🛡
-        self.assertGreater(len(handlers_shop.shop_kb().inline_keyboard), 6)  # 🛒
         # اتحادیه: کاربر بدون اتحادیه → دکمهٔ ساخت/لیست می‌بیند
         self.assertIsNotNone(u)
 

@@ -1,7 +1,7 @@
 """منوی پایین ربات — صفحه‌کلید سفارشی شیشه‌ای در انتهای چت تلگرام.
 
 ساختار جدید بر اساس قانون:
-- 6 دسته اصلی در ReplyKeyboard پایین چت (همیشه قابل مشاهده)
+- 5 دسته اصلی در ReplyKeyboard پایین چت (همیشه قابل مشاهده)
 - تمام زیرمنوها InlineKeyboard با دکمه ⬅️ بازگشت و 🏠 منوی اصلی
 - همه قابلیت‌های عادی بازی داخل منو، فقط دستورات خاص (/gift, /attack, /admin, /myid, /start, /menu, /hidemenu) به صورت دستوری باقی می‌مانند
 - منطق بازی دست‌نخورده، فقط UI بازطراحی شده
@@ -31,9 +31,8 @@ BTN_ARMY = "🪖 ارتش"
 BTN_DEFENSE = "🛡 دفاع"
 BTN_BATTLE = "⚔️ نبرد"
 BTN_CLAN = "🏰 اتحادیه"
-BTN_SHOP = "🛒 فروشگاه"
 
-MENU_BUTTONS = (BTN_BASE, BTN_ARMY, BTN_DEFENSE, BTN_BATTLE, BTN_CLAN, BTN_SHOP)
+MENU_BUTTONS = (BTN_BASE, BTN_ARMY, BTN_DEFENSE, BTN_BATTLE, BTN_CLAN)
 
 # ── Callback های ناوبری ────────────────────────────────────────────────
 NAV_BASE = "nav:base"
@@ -41,7 +40,6 @@ NAV_ARMY = "nav:army"
 NAV_DEFENSE = "nav:defense"
 NAV_BATTLE = "nav:battle"
 NAV_CLAN = "nav:clan"
-NAV_SHOP = "nav:shop"
 NAV_MAIN = "nav:main"
 
 def setup(db: DB) -> None:
@@ -49,15 +47,14 @@ def setup(db: DB) -> None:
     _db = db
 
 def main_menu_kb() -> ReplyKeyboardMarkup:
-    """صفحه‌کلید اصلی پایین چت — 2 ردیف 3تایی"""
+    """صفحه‌کلید اصلی پایین چت — بدون فروشگاه و قلمرو"""
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text=BTN_BASE),
              KeyboardButton(text=BTN_ARMY),
              KeyboardButton(text=BTN_DEFENSE)],
             [KeyboardButton(text=BTN_BATTLE),
-             KeyboardButton(text=BTN_CLAN),
-             KeyboardButton(text=BTN_SHOP)],
+             KeyboardButton(text=BTN_CLAN)],
         ],
         resize_keyboard=True,
         is_persistent=True,
@@ -91,8 +88,7 @@ async def cmd_menu(message: Message) -> None:
         "🪖 ارتش — آموزش یگان، ارتقا، موجودی\n"
         "🛡 دفاع — خرید و ارتقای سازه‌ها، سپر\n"
         "⚔️ نبرد — نبرد تصادفی، حمله، تاریخچه\n"
-        "🏰 اتحادیه — قبیله، جنگ، قلمروها\n"
-        "🛒 فروشگاه — خرید آیتم، موجودی\n"
+        "🏰 اتحادیه — قبیله، جنگ\n"
         "────────────\n"
         "برای مخفی‌کردن منو: /hidemenu",
         reply_markup=main_menu_kb(),
@@ -581,7 +577,6 @@ def clan_menu_kb(is_member: bool) -> InlineKeyboardMarkup:
         b.button(text="🏰 ساخت اتحادیه", callback_data="clan:create_prompt")
         b.button(text="📋 پیوستن به اتحادیه", callback_data="clan:list")
     b.button(text="📋 لیست اتحادیه‌ها", callback_data="clan:list")
-    b.button(text="🗺 قلمروها", callback_data="clan:territory")
     b.button(text="⬅️ بازگشت", callback_data=NAV_MAIN)
     b.button(text="🏠 منوی اصلی", callback_data=NAV_MAIN)
     b.adjust(2,2,2,2)
@@ -592,14 +587,14 @@ def clan_menu_text(is_member: bool) -> str:
         return (
             f"🏰 <b>اتحادیه</b>\n"
             f"────────────────\n"
-            f"اتحادیهٔ خود را مدیریت کن، به جنگ برو و قلمرو تصاحب کن.\n"
+            f"اتحادیهٔ خود را مدیریت کن، به جنگ برو.\n"
             f"از منوی زیر انتخاب کن:"
         )
     return (
         f"🏰 <b>اتحادیه</b>\n"
         f"────────────────\n"
         f"هنوز عضو اتحادیه‌ای نیستی!\n"
-        f"با اتحادیه می‌توانی خزانهٔ مشترک داشته باشی، جنگ ۲۴ ساعته راه بیندازی و قلمرو تصاحب کنی.\n"
+        f"با اتحادیه می‌توانی خزانهٔ مشترک داشته باشی و جنگ ۲۴ ساعته راه بیندازی.\n"
         f"از منوی زیر انتخاب کن:"
     )
 
@@ -705,110 +700,6 @@ async def cb_clan_create_prompt(cb: CallbackQuery) -> None:
     b.button(text="🏠 منوی اصلی", callback_data=NAV_MAIN)
     b.adjust(2)
     await cb.message.edit_text("🏰 <b>ساخت اتحادیه</b>\nنام اتحادیه را بفرست (مثلاً):\n<code>/clan_create شیران</code>", reply_markup=b.as_markup())
-    await cb.answer()
-
-@router.callback_query(F.data == "clan:territory")
-async def cb_clan_territory(cb: CallbackQuery) -> None:
-    from .handlers_territory import map_text, map_kb
-    u = await _db.ensure_user(cb.from_user.id, cb.from_user.username or "", cb.from_user.first_name or "")
-    text = await map_text()
-    kb = await map_kb(u)
-    await cb.message.edit_text(text, reply_markup=kb)
-    await cb.answer()
-
-# ════════════════════════════════════════════════════════════════════
-#  🗺 Territory upgrades (زیرمنوی قلمروها)
-# ════════════════════════════════════════════════════════════════════
-@router.callback_query(F.data == "territory:upgrades")
-async def cb_territory_upgrades(cb: CallbackQuery) -> None:
-    ters = await _db.territories()
-    lines = ["⬆️ <b>ارتقای قلمروها</b>", "────────────────", "سطح قلمرو با سقوط و تصاحب بالا می‌رود. هر سطح سلامت و جایزه بیشتری دارد:"]
-    for t in ters:
-        next_hp = game.territory_hp(t["level"]+1)
-        lines.append(f"{t['name']} — سطح {game.fa(t['level'])} → سلامت {game.fa(t['max_hp'])} → بعدی: {game.fa(next_hp)}")
-    b = InlineKeyboardBuilder()
-    b.button(text="🗺 نقشه قلمروها", callback_data="clan:territory")
-    b.button(text="⬅️ بازگشت", callback_data=NAV_CLAN)
-    b.button(text="🏠 منوی اصلی", callback_data=NAV_MAIN)
-    b.adjust(1,2)
-    await cb.message.edit_text("\n".join(lines), reply_markup=b.as_markup())
-    await cb.answer()
-
-# ════════════════════════════════════════════════════════════════════
-#  🛒 فروشگاه
-# ════════════════════════════════════════════════════════════════════
-def shop_menu_kb() -> InlineKeyboardMarkup:
-    b = InlineKeyboardBuilder()
-    b.button(text="🏅 فروشگاه ویژه", callback_data="shop:buy")
-    b.button(text="🎒 موجودی", callback_data="shop:inventory")
-    b.button(text="✨ آیتم‌های فعال", callback_data="shop:active")
-    b.button(text="⬅️ بازگشت", callback_data=NAV_MAIN)
-    b.button(text="🏠 منوی اصلی", callback_data=NAV_MAIN)
-    b.adjust(2,1,2)
-    return b.as_markup()
-
-def shop_menu_text(user: dict) -> str:
-    return (
-        f"🛒 <b>فروشگاه</b>\n"
-        f"────────────────\n"
-        f"💰 موجودی: {admin_core.coins_display(user)} سکه\n"
-        f"────────────────\n"
-        f"آیتم‌های ویژه، موجودی و آیتم‌های فعال را از زیر انتخاب کن:"
-    )
-
-@router.message(F.text == BTN_SHOP)
-async def on_shop(message: Message) -> None:
-    u = await _db.ensure_user(message.from_user.id, message.from_user.username or "", message.from_user.first_name or "")
-    await message.answer(shop_menu_text(u), reply_markup=shop_menu_kb())
-
-@router.callback_query(F.data == NAV_SHOP)
-async def cb_nav_shop(cb: CallbackQuery) -> None:
-    u = await _db.ensure_user(cb.from_user.id, cb.from_user.username or "", cb.from_user.first_name or "")
-    await cb.message.edit_text(shop_menu_text(u), reply_markup=shop_menu_kb())
-    await cb.answer()
-
-@router.callback_query(F.data == "shop:buy")
-async def cb_shop_buy_menu(cb: CallbackQuery) -> None:
-    u = await _db.ensure_user(cb.from_user.id, cb.from_user.username or "", cb.from_user.first_name or "")
-    from .handlers_shop import shop_text, shop_kb
-    text = shop_text(u)
-    kb = shop_kb()
-    await cb.message.edit_text(text, reply_markup=kb)
-    await cb.answer()
-
-@router.callback_query(F.data == "shop:inventory")
-async def cb_shop_inventory(cb: CallbackQuery) -> None:
-    u = await _db.ensure_user(cb.from_user.id, cb.from_user.username or "", cb.from_user.first_name or "")
-    from .handlers_shop import inventory_text, inventory_kb, inv_cache, buff_cache
-    inv = await _db.inv_get(u["user_id"])
-    buffs = await _db.buffs_active(u["user_id"])
-    inv_cache[u["user_id"]] = inv
-    buff_cache[u["user_id"]] = buffs
-    text = inventory_text(u)
-    kb = inventory_kb(u)
-    await cb.message.edit_text(text, reply_markup=kb)
-    await cb.answer()
-
-@router.callback_query(F.data == "shop:active")
-async def cb_shop_active(cb: CallbackQuery) -> None:
-    u = await _db.ensure_user(cb.from_user.id, cb.from_user.username or "", cb.from_user.first_name or "")
-    buffs = await _db.buffs_active(u["user_id"])
-    if not buffs:
-        text = "✨ <b>آیتم‌های فعال</b>\n────────────────\nهیچ آیتم فعالی نداری! از «🏅 فروشگاه ویژه» آیتم بخر و فعال کن."
-    else:
-        lines = ["✨ <b>آیتم‌های فعال</b>", "────────────────"]
-        for k, until in buffs.items():
-            item = game.ITEMS.get(k, {})
-            remain = int((until - time.time())//60)
-            lines.append(f"{item.get('emoji','✨')} {item.get('name',k)} — {game.fa(remain)} دقیقه باقی‌مانده")
-        text = "\n".join(lines)
-    b = InlineKeyboardBuilder()
-    b.button(text="🏅 فروشگاه ویژه", callback_data="shop:buy")
-    b.button(text="🎒 موجودی", callback_data="shop:inventory")
-    b.button(text="⬅️ بازگشت", callback_data=NAV_SHOP)
-    b.button(text="🏠 منوی اصلی", callback_data=NAV_MAIN)
-    b.adjust(2,2)
-    await cb.message.edit_text(text, reply_markup=b.as_markup())
     await cb.answer()
 
 # ════════════════════════════════════════════════════════════════════

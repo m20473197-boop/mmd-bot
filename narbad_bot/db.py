@@ -98,23 +98,6 @@ CREATE TABLE IF NOT EXISTS wars (
     winner_id INTEGER
 );
 
-CREATE TABLE IF NOT EXISTS territories (
-    id        INTEGER PRIMARY KEY AUTOINCREMENT,
-    key       TEXT UNIQUE NOT NULL,
-    name      TEXT NOT NULL,
-    level     INTEGER NOT NULL DEFAULT 1,
-    hp        INTEGER NOT NULL,
-    max_hp    INTEGER NOT NULL,
-    owner_clan INTEGER
-);
-
-CREATE TABLE IF NOT EXISTS terr_contribs (
-    territory_id INTEGER NOT NULL,
-    user_id      INTEGER NOT NULL,
-    damage       INTEGER NOT NULL DEFAULT 0,
-    PRIMARY KEY (territory_id, user_id)
-);
-
 CREATE TABLE IF NOT EXISTS inventory (
     user_id INTEGER NOT NULL,
     item    TEXT NOT NULL,
@@ -168,7 +151,6 @@ class DB:
         self.conn.row_factory = aiosqlite.Row
         await self.conn.executescript(SCHEMA)
         await self._migrate()
-        await self._seed_territories()
         await self.conn.commit()
 
     async def _migrate(self) -> None:
@@ -206,19 +188,10 @@ class DB:
         await self.conn.execute(
             "DELETE FROM army WHERE unit IN ('wall', 'tower', 'castle', 'radar', 'air_defense')"
         )
-
-    async def _seed_territories(self) -> None:
-        cur = await self.conn.execute("SELECT COUNT(*) AS n FROM territories")
-        row = await cur.fetchone()
-        await cur.close()
-        if row and row[0] == 0:
-            for key, name in game.TERRITORIES_SEED:
-                hp = game.territory_hp(1)
-                await self.conn.execute(
-                    "INSERT INTO territories (key, name, level, hp, max_hp) "
-                    "VALUES (?, ?, 1, ?, ?)",
-                    (key, name, hp, hp),
-                )
+        # مایگریشن حذف سیستم قلمروها: جدول‌های مختص قلمرو حذف می‌شوند
+        # (این داده‌ها فقط متعلق به سیستم قلمرو بودند و هیچ سیستم دیگری به آن‌ها وابسته نیست)
+        await self.conn.execute("DROP TABLE IF EXISTS territories")
+        await self.conn.execute("DROP TABLE IF EXISTS terr_contribs")
 
     async def close(self) -> None:
         if self.conn:
@@ -556,9 +529,6 @@ class DB:
             # اتحادیه خالی شد → انحلال
             await self._execute("DELETE FROM clans WHERE id = ?", (clan_id,))
             await self._execute(
-                "UPDATE territories SET owner_clan = NULL WHERE owner_clan = ?",
-                (clan_id,))
-            await self._execute(
                 "UPDATE wars SET status = 'finished', winner_id = NULL "
                 "WHERE status = 'active' AND (clan_a = ? OR clan_b = ?)",
                 (clan_id, clan_id))
@@ -648,36 +618,6 @@ class DB:
         col = "points_a" if side == "A" else "points_b"
         await self._execute(
             f"UPDATE wars SET {col} = {col} + ? WHERE id = ?", (points, war_id))
-
-    # ------------------------------------------------------------ قلمروها
-    async def territories(self) -> list[dict]:
-        return await self._fetchall("SELECT * FROM territories ORDER BY id")
-
-    async def get_territory(self, tid: int) -> dict | None:
-        return await self._fetchone("SELECT * FROM territories WHERE id = ?", (tid,))
-
-    async def update_territory(self, tid: int, **fields: Any) -> None:
-        cols = ", ".join(f"{k} = ?" for k in fields)
-        await self._execute(
-            f"UPDATE territories SET {cols} WHERE id = ?", (*fields.values(), tid))
-
-    async def terr_contribs(self, tid: int, top: int = 5) -> list[dict]:
-        return await self._fetchall(
-            "SELECT c.damage, u.user_id, u.first_name, u.username, u.clan_id "
-            "FROM terr_contribs c JOIN users u ON u.user_id = c.user_id "
-            "WHERE c.territory_id = ? ORDER BY c.damage DESC LIMIT ?",
-            (tid, top),
-        )
-
-    async def add_terr_contrib(self, tid: int, user_id: int, damage: int) -> None:
-        await self._execute(
-            "INSERT INTO terr_contribs (territory_id, user_id, damage) VALUES (?, ?, ?) "
-            "ON CONFLICT(territory_id, user_id) DO UPDATE SET damage = damage + excluded.damage",
-            (tid, user_id, damage),
-        )
-
-    async def clear_terr_contribs(self, tid: int) -> None:
-        await self._execute("DELETE FROM terr_contribs WHERE territory_id = ?", (tid,))
 
     # ------------------------------------------------------------ موجودی و بافت‌ها
     async def inv_get(self, user_id: int) -> dict[str, int]:
@@ -800,8 +740,6 @@ class DB:
         await self._execute("DELETE FROM missions WHERE user_id = ?", (user_id,))
         await self._execute("DELETE FROM mines WHERE user_id = ?", (user_id,))
         await self._execute("DELETE FROM growth WHERE user_id = ?", (user_id,))
-        await self._execute(
-            "DELETE FROM terr_contribs WHERE user_id = ?", (user_id,))
         return await self.get_user(user_id)
 
     # ------------------------------------------------------------ معدن
