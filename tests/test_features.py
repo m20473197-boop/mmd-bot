@@ -1,4 +1,4 @@
-"""تست‌های قابلیت‌های جدید: مأموریت‌ها، معدن، آیتم‌ها، اتحادیه، قلمرو، نمودار."""
+"""تست‌های قابلیت‌های جدید: مأموریت‌ها، معدن، آیتم‌ها، اتحادیه، نمودار."""
 import asyncio
 import os
 import tempfile
@@ -59,19 +59,6 @@ class TestItems(unittest.TestCase):
         self.assertLessEqual(repair_cas, base_cas + 1e-9)
 
 
-class TestTerritories(unittest.TestCase):
-    def test_hp_formula(self):
-        self.assertEqual(game.territory_hp(1), 1500)
-        self.assertEqual(game.territory_hp(2), 4200)  # 1500*2.828=4242 → 4200
-        self.assertGreater(game.territory_hp(5), game.territory_hp(2))
-
-    def test_seed(self):
-        self.assertGreaterEqual(len(game.TERRITORIES_SEED), 6)
-        for key, name in game.TERRITORIES_SEED:
-            self.assertIsInstance(key, str)
-            self.assertIn(" ", name)  # «🔥 دشت آتش»
-
-
 class TestWar(unittest.TestCase):
     def test_war_points(self):
         self.assertEqual(game.war_points(True, 600), 120 + 2)
@@ -92,35 +79,6 @@ class TestFeaturesDB(unittest.IsolatedAsyncioTestCase):
 
     async def asyncTearDown(self):
         await self.db.close()
-
-    async def test_territory_seeding(self):
-        ters = await self.db.territories()
-        self.assertGreaterEqual(len(ters), 6)
-        self.assertEqual(ters[0]["hp"], game.territory_hp(1))
-
-    async def test_territory_attack_flow(self):
-        """حملهٔ دو کاربر هم‌زمان به یک قلمرو (شبیه‌سازی سادهٔ خودِ شبیه‌ساز)."""
-        await self.db.ensure_user(1, "a", "الف")
-        await self.db.ensure_user(2, "b", "ب")
-        await self.db.set_unit(1, "tank", 5)
-        await self.db.set_unit(2, "missile", 1)
-        t = (await self.db.territories())[0]
-
-        for uid in (1, 2):
-            army = await self.db.get_army(uid)
-            power = game.attack_power(army)
-            damage = max(25, round(power * 0.12))
-            t = await self.db.get_territory(t["id"])
-            new_hp = t["hp"] - damage
-            await self.db.update_territory(t["id"], hp=max(0, new_hp))
-            await self.db.add_terr_contrib(t["id"], uid, damage)
-
-        t = await self.db.get_territory(t["id"])
-        self.assertLess(t["hp"], t["max_hp"])
-        contribs = await self.db.terr_contribs(t["id"])
-        self.assertEqual(len(contribs), 2)
-        self.assertEqual(contribs[0]["damage"] + contribs[1]["damage"],
-                         t["max_hp"] - t["hp"])
 
     async def test_clan_lifecycle(self):
         clan = await self.db.create_clan("شیران", 1)

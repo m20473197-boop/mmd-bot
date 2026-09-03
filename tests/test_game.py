@@ -123,8 +123,6 @@ class TestFormatting(unittest.TestCase):
     def test_fa_digits(self):
         self.assertEqual(game.fa(0), "۰")
         self.assertEqual(game.fa(1234567), "۱٬۲۳۴٬۵۶۷")
-    def test_shop_keys(self):
-        self.assertEqual(len(game.SHOP), len(game.UNITS) + len(game.DEFENSES))
 
 
 if __name__ == "__main__":

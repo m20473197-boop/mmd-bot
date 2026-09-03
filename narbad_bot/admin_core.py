@@ -50,7 +50,7 @@ def is_tester(user_id: int) -> bool:
 
 
 def no_cooldown(user_id: int) -> bool:
-    """مدیر و تست‌کننده کول‌داون حمله/قلمرو ندارند (تست سریع)."""
+    """مدیر و تست‌کننده کول‌داون حمله ندارند (تست سریع)."""
     return admins.is_privileged(user_id)
 
 

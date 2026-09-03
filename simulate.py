@@ -1,7 +1,7 @@
 """دموی نبرد در ترمینال — بدون نیاز به تلگرام.
 
 دو لشکر تصادفی می‌سازد، نبرد را شبیه‌سازی می‌کند و قابلیت‌های جدید
-(بافت‌ها، قلمرو، مأموریت‌ها) را نشان می‌دهد:
+(بافت‌ها، مأموریت‌ها) را نشان می‌دهد:
 
     python simulate.py
 """
@@ -61,12 +61,6 @@ def main() -> None:
         print(f"💸 آبی {game.fa(res['loot'])} سکه از دست داد")
     print(f"⭐ تجربهٔ آبی: +{game.fa(res['att_xp'])} | سرخ: +{game.fa(res['def_xp'])}")
 
-    print("\n" + "─" * 52)
-    print("🗺 قلمرو نمونه (سطح ۱):")
-    t_hp, t_max = game.territory_hp(1), game.territory_hp(1)
-    dmg = max(25, round(blue_power * 0.12))
-    print(f"   خسارت یک حمله: {game.fa(dmg)} → سلامت: "
-          f"{game.fa(t_hp - dmg)}/{game.fa(t_max)}")
 
     print("\n🎯 مأموریت روزانهٔ نمونه:")
     m = game.MISSIONS["win2"]
