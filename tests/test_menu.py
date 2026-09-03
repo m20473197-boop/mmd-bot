@@ -6,8 +6,9 @@ import unittest
 
 from aiogram import Dispatcher
 
-from narbad_bot import (handlers, handlers_clan, handlers_missions,
-                        handlers_shop, handlers_territory, menu)
+from narbad_bot import (handlers, handlers_army, handlers_clan,
+                        handlers_defense, handlers_missions, handlers_shop,
+                        handlers_territory, menu)
 from narbad_bot.db import DB
 
 
@@ -30,16 +31,17 @@ class TestMenuLayout(unittest.TestCase):
                     "🏰 اتحادیه", "🛡 دفاع", "🛒 فروشگاه"}
         self.assertEqual(set(menu.MENU_BUTTONS), expected)
 
-    def test_menu_router_has_six_button_handlers(self):
-        """هر شش دکمهٔ منو هندلر مخصوص خودش را دارد (on_base/on_battle/...).
-
-        (ثبت کامل همهٔ روترها در tests/test_admin_system.py انجام می‌شود —
-        روترها فقط یک والد می‌توانند داشته باشند و قابل ثبت مجدد نیستند.)
-        """
+    def test_menu_router_has_five_button_handlers(self):
+        """چهار دکمهٔ دسته در menu router، دکمهٔ «🪖 ارتش» در handlers_army و دکمهٔ «🛡 دفاع» در handlers_defense."""
         names = {h.callback.__name__ for h in menu.router.message.handlers}
-        for expected in ("on_base", "on_battle", "on_army",
-                         "on_clan", "on_defense", "on_shop"):
+        for expected in ("on_base", "on_battle",
+                         "on_clan", "on_shop"):
             self.assertIn(expected, names)
+        from narbad_bot import handlers_army, handlers_defense
+        army_names = {h.callback.__name__ for h in handlers_army.router.message.handlers}
+        self.assertIn("on_army", army_names)
+        def_names = {h.callback.__name__ for h in handlers_defense.router.message.handlers}
+        self.assertIn("on_defense", def_names)
 
     def test_shield_menu_does_not_crash_hours_parser(self):
         """دادهٔ «shield:menu» نباید توسط هندلر «shield:» شکسته شود."""
@@ -87,7 +89,8 @@ class TestMenuDB(unittest.IsolatedAsyncioTestCase):
         # attack_kb قدیمی → battle_kb جدید
         atk_kb_fn = getattr(menu, "attack_kb", None) or getattr(menu, "battle_menu_kb", None)
         self.assertIn("تصادفی", atk_kb_fn().model_dump_json() if atk_kb_fn else "")  # ⚔️ نبرد
-        self.assertGreater(len(handlers.train_kb().inline_keyboard), 5)    # 🪖
+        eq_buttons = [b.callback_data for r in handlers_army.equipment_kb().inline_keyboard for b in r]
+        self.assertEqual(sum(1 for c in eq_buttons if c.startswith("army:eqview:")), 7)  # 🪖 ۷ تجهیز
         self.assertGreater(len(handlers.defense_kb().inline_keyboard), 3)  # 🛡
         self.assertGreater(len(handlers_shop.shop_kb().inline_keyboard), 6)  # 🛒
         # اتحادیه: کاربر بدون اتحادیه → دکمهٔ ساخت/لیست می‌بیند

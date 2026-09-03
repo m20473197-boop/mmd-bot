@@ -112,10 +112,10 @@ def _name_of(u: dict) -> str:
 async def _base_overview_text(user: dict) -> str:
     from .handlers import energy_line
     army = await _db.get_army(user["user_id"])
-    structures = {k: v for k, v in army.items() if k in game.DEFENSES}
+    defenses = await _db.get_defenses(user["user_id"])
     units = {k: v for k, v in army.items() if k in game.UNITS}
     power = game.attack_power(army)
-    defense = game.defense_power(units, structures)
+    defense = game.defense_power(units, defenses, base_level=user["level"])
     next_xp = game.xp_to_next(user["level"])
     bar_len = 12
     filled = round(user["xp"] / next_xp * bar_len)
@@ -182,12 +182,13 @@ async def cb_base_profile(cb: CallbackQuery) -> None:
     from .handlers import esc, name_of, coin, energy_line
     u = await _db.ensure_user(cb.from_user.id, cb.from_user.username or "", cb.from_user.first_name or "")
     army = await _db.get_army(u["user_id"])
-    structures = {k: v for k, v in army.items() if k in game.DEFENSES}
+    defenses = await _db.get_defenses(u["user_id"])
     units_only = {k: v for k, v in army.items() if k in game.UNITS}
     energy, _ = game.effective_energy(u)
     power = game.attack_power(army)
-    defense = game.defense_power(units_only, structures)
+    defense = game.defense_power(units_only, defenses, base_level=u["level"])
     total_units = sum(units_only.values())
+    total_structs = sum(s.get("level", 0) for s in defenses.values())
     next_xp = game.xp_to_next(u["level"])
     bar_len = 14
     filled = round(u["xp"] / next_xp * bar_len) if next_xp else bar_len
@@ -245,7 +246,7 @@ async def cb_base_profile(cb: CallbackQuery) -> None:
         f"────────────────\n"
         f"💰 سکه: <b>{game.fa(coin(u))}</b>  |  {energy_line(u)}\n"
         f"⚔️ قدرت حمله: <b>{game.fa(power)}</b>  |  🛡 قدرت دفاع: <b>{game.fa(defense)}</b>\n"
-        f"🪖 اندازه ارتش: <b>{game.fa(total_units)}</b> یگان  |  🏰 سازه دفاعی: <b>{game.fa(sum(structures.values()))}</b>\n"
+        f"🪖 اندازه ارتش: <b>{game.fa(total_units)}</b> یگان  |  🏰 سازه دفاعی: <b>{game.fa(total_structs)}</b>\n"
         f"{clan_line}\n"
         f"{shield_line}\n"
         f"────────────────\n"
@@ -429,199 +430,14 @@ async def cb_base_log(cb: CallbackQuery) -> None:
     await cb.answer()
 
 # ════════════════════════════════════════════════════════════════════
-#  🪖 ارتش
+#  🪖 ارتش — به ماژول handlers_army.py منتقل شد (سیستم نوین ارتش)
+#  دکمهٔ پایین چت «🪖 ارتش» و ناوبری nav:army در هندلرهای همان ماژول پاسخ داده می‌شوند
 # ════════════════════════════════════════════════════════════════════
-def army_menu_kb() -> InlineKeyboardMarkup:
-    b = InlineKeyboardBuilder()
-    b.button(text="🎓 آموزش یگان‌ها", callback_data="army:train")
-    b.button(text="🗃️ ارتش من", callback_data="army:inventory")
-    b.button(text="⬆️ ارتقای یگان", callback_data="army:upgrade")
-    b.button(text="⬅️ بازگشت", callback_data=NAV_MAIN)
-    b.button(text="🏠 منوی اصلی", callback_data=NAV_MAIN)
-    b.adjust(2,1,2)
-    return b.as_markup()
-
-def army_menu_text(user: dict, army: dict) -> str:
-    power = game.attack_power(army)
-    total_units = sum(c for k,c in army.items() if k in game.UNITS)
-    return (
-        f"🪖 <b>ارتش</b>\n"
-        f"────────────────\n"
-        f"⚔️ قدرت کل: <b>{game.fa(power)}</b>\n"
-        f"👥 مجموع یگان‌ها: {game.fa(total_units)}\n"
-        f"💰 موجودی: {admin_core.coins_display(user)}\n"
-        f"────────────────\n"
-        f"از منوی زیر ارتش خود را مدیریت کن:"
-    )
-
-@router.message(F.text == BTN_ARMY)
-async def on_army(message: Message) -> None:
-    u = await _db.ensure_user(message.from_user.id, message.from_user.username or "", message.from_user.first_name or "")
-    army = await _db.get_army(u["user_id"])
-    await message.answer(army_menu_text(u, army), reply_markup=army_menu_kb())
-
-@router.callback_query(F.data == NAV_ARMY)
-async def cb_nav_army(cb: CallbackQuery) -> None:
-    u = await _db.ensure_user(cb.from_user.id, cb.from_user.username or "", cb.from_user.first_name or "")
-    army = await _db.get_army(u["user_id"])
-    await cb.message.edit_text(army_menu_text(u, army), reply_markup=army_menu_kb())
-    await cb.answer()
-
-@router.callback_query(F.data == "army:train")
-async def cb_army_train(cb: CallbackQuery) -> None:
-    u = await _db.ensure_user(cb.from_user.id, cb.from_user.username or "", cb.from_user.first_name or "")
-    from .handlers import train_text
-    # reuse train_text but add nav
-    text = train_text(u)
-    from .handlers import train_kb
-    kb = train_kb()
-    # replace close with nav
-    # train_kb has 9 unit buttons + 2 extra (defense, close)
-    # we will rebuild with nav
-    b = InlineKeyboardBuilder()
-    for key, unit in game.UNITS.items():
-        b.button(text=f"{unit['emoji']} {unit['name']} ×۱۰ — {game.fa(unit['cost']*10)}💰", callback_data=f"buy:{key}:10")
-    b.button(text="🛡️ تجهیزات دفاعی", callback_data=NAV_DEFENSE)
-    b.button(text="⬅️ بازگشت", callback_data=NAV_ARMY)
-    b.button(text="🏠 منوی اصلی", callback_data=NAV_MAIN)
-    b.adjust(1)
-    await cb.message.edit_text(text, reply_markup=b.as_markup())
-    await cb.answer()
-
-@router.callback_query(F.data == "army:inventory")
-async def cb_army_inventory(cb: CallbackQuery) -> None:
-    u = await _db.ensure_user(cb.from_user.id, cb.from_user.username or "", cb.from_user.first_name or "")
-    army = await _db.get_army(u["user_id"])
-    if not army:
-        text = "🗃️ <b>ارتش من</b>\n────────────────\nهنوز یگانی نداری! از «🎓 آموزش یگان‌ها» شروع کن."
-    else:
-        lines = ["🗃️ <b>ارتش من</b>", "────────────────"]
-        for k, cnt in army.items():
-            if k in game.UNITS:
-                info = game.UNITS[k]
-                lines.append(f"{info['emoji']} {info['name']}: {game.fa(cnt)} × قدرت {game.fa(info['power'])} = {game.fa(cnt*info['power'])}")
-            elif k in game.DEFENSES:
-                info = game.DEFENSES[k]
-                lines.append(f"{info['emoji']} {info['name']} (دفاعی): {game.fa(cnt)}")
-        lines.append("────────────────")
-        lines.append(f"⚔️ قدرت کل: <b>{game.fa(game.attack_power(army))}</b>")
-        text = "\n".join(lines)
-    b = InlineKeyboardBuilder()
-    b.button(text="🎓 آموزش یگان‌ها", callback_data="army:train")
-    b.button(text="⬆️ ارتقای یگان", callback_data="army:upgrade")
-    b.button(text="⬅️ بازگشت", callback_data=NAV_ARMY)
-    b.button(text="🏠 منوی اصلی", callback_data=NAV_MAIN)
-    b.adjust(2,2)
-    await cb.message.edit_text(text, reply_markup=b.as_markup())
-    await cb.answer()
-
-@router.callback_query(F.data == "army:upgrade")
-async def cb_army_upgrade(cb: CallbackQuery) -> None:
-    u = await _db.ensure_user(cb.from_user.id, cb.from_user.username or "", cb.from_user.first_name or "")
-    army = await _db.get_army(u["user_id"])
-    lines = ["⬆️ <b>ارتقای یگان‌ها</b>", "────────────────", "برای ارتقا، یگان‌های بیشتری آموزش دهید. هر یگان قدرت ثابت دارد:"]
-    for k, unit in game.UNITS.items():
-        have = army.get(k, 0)
-        lines.append(f"{unit['emoji']} {unit['name']}: قدرت {game.fa(unit['power'])} | موجود: {game.fa(have)} | هزینه ۱۰ عدد: {game.fa(unit['cost']*10)}💰")
-    lines.append("────────────────")
-    lines.append("💡 ارتقا با خرید تعداد بیشتر حاصل می‌شود!")
-    b = InlineKeyboardBuilder()
-    b.button(text="🎓 آموزش یگان‌ها", callback_data="army:train")
-    b.button(text="⬅️ بازگشت", callback_data=NAV_ARMY)
-    b.button(text="🏠 منوی اصلی", callback_data=NAV_MAIN)
-    b.adjust(1,2)
-    await cb.message.edit_text("\n".join(lines), reply_markup=b.as_markup())
-    await cb.answer()
 
 # ════════════════════════════════════════════════════════════════════
-#  🛡 دفاع
+#  🛡 دفاع — به ماژول handlers_defense.py منتقل شد (سیستم نوین دفاع)
+#  دکمهٔ پایین چت «🛡 دفاع» و ناوبری nav:defense در هندلرهای همان ماژول پاسخ داده می‌شوند
 # ════════════════════════════════════════════════════════════════════
-def defense_menu_kb() -> InlineKeyboardMarkup:
-    b = InlineKeyboardBuilder()
-    b.button(text="🧱 خرید سازه‌ها", callback_data="defense:buy")
-    b.button(text="⬆️ ارتقای دفاع", callback_data="defense:upgrade")
-    b.button(text="🛡️ سپر محافظتی", callback_data="defense:shield")
-    b.button(text="⬅️ بازگشت", callback_data=NAV_MAIN)
-    b.button(text="🏠 منوی اصلی", callback_data=NAV_MAIN)
-    b.adjust(2,1,2)
-    return b.as_markup()
-
-def defense_menu_text(user: dict, army: dict) -> str:
-    structures = {k: v for k, v in army.items() if k in game.DEFENSES}
-    defense = game.defense_power({k: v for k, v in army.items() if k in game.UNITS}, structures)
-    return (
-        f"🛡 <b>دفاع</b>\n"
-        f"────────────────\n"
-        f"🛡 قدرت دفاع: <b>{game.fa(defense)}</b>\n"
-        f"💰 موجودی: {admin_core.coins_display(user)}\n"
-        f"────────────────\n"
-        f"سازه‌های دفاعی و سپر را از زیر انتخاب کن:"
-    )
-
-@router.message(F.text == BTN_DEFENSE)
-async def on_defense(message: Message) -> None:
-    u = await _db.ensure_user(message.from_user.id, message.from_user.username or "", message.from_user.first_name or "")
-    army = await _db.get_army(u["user_id"])
-    await message.answer(defense_menu_text(u, army), reply_markup=defense_menu_kb())
-
-@router.callback_query(F.data == NAV_DEFENSE)
-async def cb_nav_defense(cb: CallbackQuery) -> None:
-    u = await _db.ensure_user(cb.from_user.id, cb.from_user.username or "", cb.from_user.first_name or "")
-    army = await _db.get_army(u["user_id"])
-    await cb.message.edit_text(defense_menu_text(u, army), reply_markup=defense_menu_kb())
-    await cb.answer()
-
-@router.callback_query(F.data == "defense:buy")
-async def cb_defense_buy(cb: CallbackQuery) -> None:
-    u = await _db.ensure_user(cb.from_user.id, cb.from_user.username or "", cb.from_user.first_name or "")
-    from .handlers import defense_text
-    text = defense_text(u)
-    b = InlineKeyboardBuilder()
-    for key, d in game.DEFENSES.items():
-        b.button(text=f"{d['emoji']} {d['name']} — {game.fa(d['cost'])}💰", callback_data=f"buydef:{key}:1")
-    b.button(text="⬅️ بازگشت", callback_data=NAV_DEFENSE)
-    b.button(text="🏠 منوی اصلی", callback_data=NAV_MAIN)
-    b.adjust(1,2)
-    await cb.message.edit_text(text, reply_markup=b.as_markup())
-    await cb.answer()
-
-@router.callback_query(F.data == "defense:upgrade")
-async def cb_defense_upgrade(cb: CallbackQuery) -> None:
-    u = await _db.ensure_user(cb.from_user.id, cb.from_user.username or "", cb.from_user.first_name or "")
-    army = await _db.get_army(u["user_id"])
-    lines = ["⬆️ <b>ارتقای دفاع</b>", "────────────────", "هر سازه دفاعی قدرت دفاعی ثابتی دارد:"]
-    for k, d in game.DEFENSES.items():
-        have = army.get(k, 0)
-        lines.append(f"{d['emoji']} {d['name']}: دفاع {game.fa(d['defense'])} | موجود: {game.fa(have)} | هزینه: {game.fa(d['cost'])}💰")
-    lines.append("────────────────")
-    lines.append("💡 ارتقا با خرید سازه بیشتر حاصل می‌شود!")
-    b = InlineKeyboardBuilder()
-    b.button(text="🧱 خرید سازه‌ها", callback_data="defense:buy")
-    b.button(text="⬅️ بازگشت", callback_data=NAV_DEFENSE)
-    b.button(text="🏠 منوی اصلی", callback_data=NAV_MAIN)
-    b.adjust(1,2)
-    await cb.message.edit_text("\n".join(lines), reply_markup=b.as_markup())
-    await cb.answer()
-
-@router.callback_query(F.data == "defense:shield")
-async def cb_defense_shield(cb: CallbackQuery) -> None:
-    u = await _db.ensure_user(cb.from_user.id, cb.from_user.username or "", cb.from_user.first_name or "")
-    if u["shield_until"] > time.time():
-        hours = int((u["shield_until"] - time.time()) // 3600)
-        b = InlineKeyboardBuilder()
-        b.button(text="⬅️ بازگشت", callback_data=NAV_DEFENSE)
-        b.button(text="🏠 منوی اصلی", callback_data=NAV_MAIN)
-        b.adjust(2)
-        await cb.message.edit_text(f"🕊 سپر تو فعاله و تا {game.fa(hours)} ساعت دیگه ادامه داره!", reply_markup=b.as_markup())
-        await cb.answer()
-        return
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text=f"🕊 سپر ۶ ساعته — {game.fa(game.SHIELD_COSTS[6])}💰", callback_data="shield:6")],
-        [InlineKeyboardButton(text=f"🕊 سپر ۲۴ ساعته — {game.fa(game.SHIELD_COSTS[24])}💰", callback_data="shield:24")],
-        nav_row(NAV_DEFENSE),
-    ])
-    await cb.message.edit_text(f"🕊 <b>سپر محافظتی</b>\nتا وقتی سپر داری هیچ‌کس نمی‌تونه به تو حمله کنه!\n💰 موجودی: {admin_core.coins_display(u)} سکه", reply_markup=kb)
-    await cb.answer()
 
 # ════════════════════════════════════════════════════════════════════
 #  ⚔️ نبرد
@@ -727,8 +543,9 @@ async def cb_battle_log(cb: CallbackQuery) -> None:
 async def cb_battle_info(cb: CallbackQuery) -> None:
     u = await _db.ensure_user(cb.from_user.id, cb.from_user.username or "", cb.from_user.first_name or "")
     army = await _db.get_army(u["user_id"])
+    defenses = await _db.get_defenses(u["user_id"])
     power = game.attack_power(army)
-    defense = game.defense_power({k: v for k, v in army.items() if k in game.UNITS}, {k: v for k, v in army.items() if k in game.DEFENSES})
+    defense = game.defense_power({k: v for k, v in army.items() if k in game.UNITS}, defenses, base_level=u["level"])
     b = InlineKeyboardBuilder()
     b.button(text="🎲 نبرد تصادفی", callback_data="battle:random")
     b.button(text="📜 تاریخچه نبردها", callback_data="battle:log")

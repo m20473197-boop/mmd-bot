@@ -33,10 +33,10 @@ def setup(db: DB) -> None:
 TESTER_GIFT_COINS = 100_000          # سکهٔ هدیهٔ اولین ورود
 TESTER_GIFT_XP = 20_000              # تجربهٔ هدیه (چند سطح بالا می‌برد)
 TESTER_GIFT_ARMY = {                 # یگان‌های هدیه
-    "soldier": 50, "ranger": 10, "tank": 5, "heli": 3,
+    "soldier": 50, "commando": 10, "tank": 5, "heli": 3,
     "fighter": 2, "missile": 2, "drone": 1,
 }
-TESTER_GIFT_DEFENSES = {"wall": 5, "castle": 2}
+TESTER_GIFT_DEFENSES = {"wall": 5, "air_defense": 2}
 TESTER_GIFT_ITEMS = {"energy_pack": 3, "lucky": 1, "magnet": 1, "repair": 2}
 
 
@@ -161,11 +161,12 @@ async def simulate_test_battle(attacker_id: int, defender_id: int) -> dict:
 
     att_army = await _db.get_army(attacker_id)
     def_army = await _db.get_army(defender_id)
-    def_struct = {k: v for k, v in def_army.items() if k in game.DEFENSES}
+    def_struct = await _db.get_defenses(defender_id)
 
     if game.attack_power(att_army) <= 0:
         return {"ok": False, "reason": "مهاجم یگان تهاجمی ندارد"}
 
     res = game.simulate_battle(att_army, def_army, def_struct,
-                               a["coins"], d["coins"])
+                               a["coins"], d["coins"],
+                               def_base_level=d.get("level", 1))
     return {"ok": True, **res}

@@ -267,20 +267,21 @@ class TestAdminPanelDB(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("admin:panel", normal_datas)
 
     async def test_registered_routers_have_no_conflict(self):
-        """ثبت تمام ۷ روتر اصلی (شامل پنل مدیریت) در یک Dispatcher."""
+        """ثبت تمام ۹ روتر اصلی (شامل پنل مدیریت، سیستم نوین ارتش و دفاع) در یک Dispatcher."""
         from aiogram import Dispatcher
-        from narbad_bot import (handlers, handlers_clan, handlers_missions,
+        from narbad_bot import (handlers, handlers_army, handlers_clan,
+                                handlers_defense, handlers_missions,
                                 handlers_shop, handlers_territory, menu)
         dp = Dispatcher()
         for r in (handlers.router, handlers_shop.router, handlers_missions.router,
                   handlers_clan.router, handlers_territory.router, menu.router,
-                  admin_panel.router):
+                  handlers_army.router, handlers_defense.router, admin_panel.router):
             try:
                 r.parent_router = None
             except Exception:  # noqa: BLE001
                 pass
             dp.include_router(r)
-        self.assertEqual(len(dp.sub_routers), 7)
+        self.assertEqual(len(dp.sub_routers), 9)
 
 
 if __name__ == "__main__":

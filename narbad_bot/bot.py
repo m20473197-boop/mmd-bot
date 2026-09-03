@@ -7,9 +7,9 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.types import BotCommand
 
-from . import (admin_core, admin_panel, config, handlers, handlers_clan,
-               handlers_missions, handlers_shop, handlers_territory, hooks,
-               menu)
+from . import (admin_core, admin_panel, config, handlers, handlers_army,
+               handlers_clan, handlers_defense, handlers_missions,
+               handlers_shop, handlers_territory, hooks, menu)
 from .db import DB
 
 # فقط دستورات خاص که نیاز به ورودی کاربر دارند یا برای دکمه مناسب نیستند
@@ -48,6 +48,10 @@ async def main() -> None:
         module.setup(db)
     hooks.setup(db)
     admin_core.setup(db)
+    # handlers_army بعد از admin_core ثبت می‌شود تا هوک تسویهٔ آموزش،
+    # هوک هدیهٔ تست‌کننده را در زنجیره نگه دارد (settle → gift hook).
+    handlers_army.setup(db)
+    handlers_defense.setup(db)
     admin_panel.setup(db)
     dp.include_router(handlers.router)
     dp.include_router(handlers_shop.router)
@@ -55,6 +59,8 @@ async def main() -> None:
     dp.include_router(handlers_clan.router)
     dp.include_router(handlers_territory.router)
     dp.include_router(menu.router)
+    dp.include_router(handlers_army.router)
+    dp.include_router(handlers_defense.router)
     dp.include_router(admin_panel.router)
 
     try:

@@ -150,7 +150,7 @@ async def cb_terr_attack(cb: CallbackQuery) -> None:
     army = await _db.get_army(user["user_id"])
     power = game.attack_power(army)
     if power <= 0:
-        await cb.answer("🪖 اول با /train یگان بخر!", show_alert=True)
+        await cb.answer("🪖 اول از «🪖 ارتش → 🏗 آموزش نیروی زمینی» سرباز آموزش بده!", show_alert=True)
         return
 
     # --- مصرف انرژی پس از عبور از همهٔ بررسی‌ها (مدیر: بدون کسر)

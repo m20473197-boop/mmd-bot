@@ -15,25 +15,74 @@ SHIELD_COSTS = {6: 800, 24: 2500}   # هزینه سپر ۶ و ۲۴ ساعته
 MAX_LOOT = 100_000        # سقف غنیمت هر نبرد
 
 # ---------------------------------------------------------------- یگان‌ها
+# ساختار نوین ارتش: یگان‌های زمینی (نیازمند آموزش زمان‌دار) + تجهیزات نظامی (خرید فوری)
+# • train_sec: زمان آموزش هر نفر (فقط یگان‌های زمینی)
+# • desc: توضیح کوتاه برای فروشگاه/پرشگاه یگان
 UNITS: dict[str, dict] = {
-    "soldier": {"name": "سرباز",        "emoji": "🪖", "cost": 120,    "power": 10},
-    "ranger":  {"name": "تکاور",        "emoji": "🔫", "cost": 320,    "power": 32},
-    "tank":    {"name": "تانک",         "emoji": "🛡️", "cost": 800,    "power": 90},
-    "heli":    {"name": "بالگرد جنگی",  "emoji": "🚁", "cost": 1_600,  "power": 185},
-    "fighter": {"name": "جنگنده",       "emoji": "✈️", "cost": 3_200,  "power": 400},
-    "missile": {"name": "موشک بالستیک", "emoji": "🚀", "cost": 6_000,  "power": 820},
-    "drone":   {"name": "پهپاد تهاجمی", "emoji": "🛸", "cost": 11_000, "power": 1_600},
-    "warship": {"name": "ناو جنگی",     "emoji": "🚢", "cost": 20_000, "power": 3_200},
-    "bomber":  {"name": "بمب‌افکن",     "emoji": "💣", "cost": 36_000, "power": 6_000},
+    "soldier":  {"name": "سرباز",        "emoji": "🪖", "cost": 50,     "power": 10,
+                 "train_sec": 4,  "desc": "پیاده‌نظام پایه؛ ارزان و سریع در آموزش، ستون اصلی هر ارتش"},
+    "commando": {"name": "کماندو",       "emoji": "⚔️", "cost": 250,    "power": 50,
+                 "train_sec": 20, "desc": "نیروی ویژه؛ ۵ برابر سرباز قدرت آتش دارد"},
+    "tank":     {"name": "تانک",         "emoji": "🛡️", "cost": 800,    "power": 90,
+                 "desc": "زره‌پوش سنگین؛ می‌شکند خطوط دفاعی حریف"},
+    "missile":  {"name": "موشک بالستیک", "emoji": "🚀", "cost": 6_000,  "power": 820,
+                 "desc": "ضربهٔ دوربرد ویرانگر؛ بدون نیاز به حضور در میدان"},
+    "warship":  {"name": "ناو جنگی",     "emoji": "🚢", "cost": 20_000, "power": 3_200,
+                 "desc": "غول دریاها؛ آتش پشتیبانی فراساحلی بی‌رحم"},
+    "fighter":  {"name": "جنگنده",       "emoji": "✈️", "cost": 3_200,  "power": 400,
+                 "desc": "برتری هوایی؛ سریع، چابک و مرگبار"},
+    "bomber":   {"name": "بمب‌افکن",     "emoji": "💣", "cost": 36_000, "power": 6_000,
+                 "desc": "قوی‌ترین یگان نبردگاه؛ بارِ انفجاری سنگین"},
+    "drone":    {"name": "پهپاد تهاجمی", "emoji": "🛩", "cost": 11_000, "power": 1_600,
+                 "desc": "شکارچی بی‌سرنشین؛ دقیق، تاب‌آور و بی‌رحم"},
+    "heli":     {"name": "بالگرد جنگی",  "emoji": "🚁", "cost": 1_600,  "power": 185,
+                 "desc": "پشتیبانی نزدیک هوایی؛ شکار زره‌پوش‌ها"},
 }
 
+# یگان‌های زمینی: از «پادگان آموزش» با زمان‌بندی ساخته می‌شوند
+GROUND_UNITS: tuple[str, ...] = ("soldier", "commando")
+# تجهیزات نظامی: از فروشگاه، خرید فوری (بدون زمان آموزش)
+EQUIPMENT_UNITS: tuple[str, ...] = ("tank", "missile", "warship", "fighter",
+                                    "bomber", "drone", "heli")
+TRAIN_MAX_QTY = 500  # سقف تعداد در هر سفارش خرید / آموزش
+
 # ---------------------------------------------------------------- دفاعیات
+# ساختار نوین سامانه دفاعی پایگاه: ۴ سازه تخصصی با قابلیت ارتقای سطح و تعمیر خسارت
+# • defense: قدرت پایه دفاع در سطح ۱
+# • cost: هزینه احداث اولیه (سطح ۱)
+# • desc: توضیح تاکتیکی سازه
 DEFENSES: dict[str, dict] = {
-    "wall":   {"name": "دیوار دفاعی",  "emoji": "🧱", "cost": 250,    "defense": 25},
-    "castle": {"name": "قلعه",          "emoji": "🏰", "cost": 1_200,  "defense": 110},
-    "tower":  {"name": "برج پدافندی",   "emoji": "🗼", "cost": 3_800,  "defense": 320},
-    "radar":  {"name": "سامانه رادار",  "emoji": "📡", "cost": 10_000, "defense": 950},
+    "wall": {
+        "name": "دیوار دفاعی",
+        "emoji": "🧱",
+        "cost": 300,
+        "defense": 30,
+        "desc": "سپر بتنی مستحکم پایگاه؛ جذب ضربات سنگین دشمن و کاهش تلفات",
+    },
+    "tower": {
+        "name": "برج دفاعی",
+        "emoji": "🗼",
+        "cost": 1_200,
+        "defense": 120,
+        "desc": "برج دیده‌بانی و آتش سنگین پدافندی علیه مهاجمان زمینی",
+    },
+    "air_defense": {
+        "name": "سامانه پدافند هوایی",
+        "emoji": "🚀",
+        "cost": 4_500,
+        "defense": 450,
+        "desc": "سامانه موشکی رهگیر برای انهدام جنگنده‌ها و بمب‌افکن‌های دشمن",
+    },
+    "radar": {
+        "name": "سامانه رادار",
+        "emoji": "📡",
+        "cost": 10_000,
+        "defense": 1_000,
+        "desc": "رادار آرایه‌فازی پیشرفته برای کشف زودهنگام و هدایت پدافند",
+    },
 }
+
+DEFENSE_KEYS: tuple[str, ...] = ("wall", "tower", "air_defense", "radar")
 
 SHOP = {**{f"u:{k}": v for k, v in UNITS.items()},
         **{f"d:{k}": v for k, v in DEFENSES.items()}}
@@ -87,32 +136,77 @@ def daily_reward(level: int) -> int:
     return DAILY_BASE + level * 40
 
 
-# ---------------------------------------------------------------- قدرت
+# ---------------------------------------------------------------- قدرت و دفاعیات
 def attack_power(army: dict[str, int]) -> int:
     """قدرت حمله = مجموع قدرت یگان‌های تهاجمی."""
     return sum(c * UNITS[u]["power"] for u, c in army.items() if u in UNITS)
 
 
-def defense_power(army: dict[str, int], structures: dict[str, int]) -> int:
-    """قدرت دفاع = یگان‌ها (۷۰٪ قدرت) + سازه‌های دفاعی."""
+def struct_defense_power(key: str, level: int, health: int = 100) -> int:
+    """قدرت دفاعی یک سازه بر اساس سطح و درصد سلامت."""
+    if key not in DEFENSES or level <= 0:
+        return 0
+    base_def = DEFENSES[key]["defense"]
+    # هر سطح بالاتر از ۱، ۶۰٪ به قدرت پایه می‌افزاید: سطح ۱ = ۱۰۰٪، سطح ۲ = ۱۶۰٪، سطح ۳ = ۲۲۰٪ ...
+    power_at_level = base_def * (1 + 0.6 * (level - 1))
+    # سلامت کمتر از ۱۰۰٪ به همان نسبت قدرت دفاعی مؤثر را کاهش می‌دهد
+    eff_health = max(0, min(100, health)) / 100.0
+    return round(power_at_level * eff_health)
+
+
+def struct_upgrade_cost(key: str, current_level: int) -> int:
+    """هزینه ارتقای سازه از سطح فعلی به سطح بعدی."""
+    if key not in DEFENSES or current_level <= 0:
+        return 0
+    base_cost = DEFENSES[key]["cost"]
+    # هزینه با هر سطح ۱٫۵ برابر می‌شود
+    return round(base_cost * (1.5 ** current_level))
+
+
+def struct_repair_cost(key: str, level: int, health: int) -> int:
+    """هزینه تعمیر سازه و رساندن سلامت به ۱۰۰٪."""
+    if key not in DEFENSES or level <= 0 or health >= 100:
+        return 0
+    base_cost = DEFENSES[key]["cost"]
+    missing = max(0, 100 - health)
+    cost_per_pct = max(1, round(base_cost * 0.002 * level))
+    return max(10, round(cost_per_pct * missing))
+
+
+def defense_power(army: dict[str, int], structures: dict | None = None,
+                  base_level: int = 1) -> int:
+    """قدرت کل دفاع = یگان‌های ارتش (۷۰٪ قدرت) + سازه‌های دفاعی + پاداش سطح پایگاه."""
+    structures = structures or {}
     unit_part = sum(c * UNITS[u]["power"] * 0.7 for u, c in army.items() if u in UNITS)
-    struct_part = sum(c * DEFENSES[d]["defense"] for d, c in structures.items() if d in DEFENSES)
-    return round(unit_part + struct_part)
+
+    struct_part = 0
+    for k, val in structures.items():
+        if isinstance(val, dict):
+            lvl = val.get("level", 0)
+            hlth = val.get("health", 100)
+            struct_part += struct_defense_power(k, lvl, hlth)
+        elif isinstance(val, (int, float)) and val > 0:
+            if k in DEFENSES:
+                struct_part += struct_defense_power(k, int(val), 100)
+            elif k == "castle":
+                # سازگاری با کدهای تستی پیشین
+                struct_part += struct_defense_power("air_defense", int(val), 100)
+
+    base_bonus = max(0, (base_level - 1) * 15)
+    return round(unit_part + struct_part + base_bonus)
 
 
 # ---------------------------------------------------------------- نبرد
 def simulate_battle(att_army: dict[str, int], def_army: dict[str, int],
-                    def_struct: dict[str, int], att_coins: int,
-                    def_coins: int, *, att_mult: float = 1.0,
-                    def_mult: float = 1.0, loot_mult: float = 1.0,
-                    xp_mult: float = 1.0, cas_mult: float = 1.0) -> dict:
-    """شبیه‌سازی کامل یک نبرد. ورودی‌ها: ارتش مهاجم/مدافع، سازه‌های مدافع و سکه‌ها.
-
-    att_mult/def_mult: ضریب قدرت (بافت‌ها)، loot_mult: ضریب غنیمت،
-    xp_mult: ضریب تجربه، cas_mult: ضریب تلفات مهاجم (کیت تعمیر).
-    """
+                    def_struct: dict | None, att_coins: int,
+                    def_coins: int, *, def_base_level: int = 1,
+                    att_mult: float = 1.0, def_mult: float = 1.0,
+                    loot_mult: float = 1.0, xp_mult: float = 1.0,
+                    cas_mult: float = 1.0) -> dict:
+    """شبیه‌سازی کامل یک نبرد. ورودی‌ها: ارتش مهاجم/مدافع، سازه‌های مدافع و سکه‌ها."""
+    def_struct = def_struct or {}
     att_power = round(attack_power(att_army) * att_mult)
-    def_power = round(defense_power(def_army, def_struct) * def_mult)
+    def_power = round(defense_power(def_army, def_struct, base_level=def_base_level) * def_mult)
 
     a = att_power * random.uniform(0.85, 1.15)
     d = def_power * 1.2 * random.uniform(0.85, 1.15)  # مزیت دفاعی ۲۰٪
